@@ -128,3 +128,39 @@ function renderResults() {
   show('results');
   $('results-title').focus({ preventScroll: true });
 }
+
+// Export a snapshot without changing the session or the displayed results.
+$('download-csv').addEventListener('click', () => {
+  if (session.active || ready || !session.values.length || $('results').hidden) return;
+  const values = session.values;
+  const stats = TimeData.summarize(values);
+  const rows = [
+    ['測定回', '測定時間（秒）'],
+    ...values.map((value, i) => [i + 1, value / 1000]),
+    ['', ''],
+    ['統計量', '値'],
+    ['目標（秒）', target / 1000],
+    ['平均（秒）', stats.mean / 1000],
+    ['中央値（秒）', stats.median / 1000],
+    ['分散（母分散・秒²）', stats.variance / 1e6],
+    ['標準偏差（秒）', stats.sd / 1000],
+    ['最小値（秒）', stats.min / 1000],
+    ['最大値（秒）', stats.max / 1000],
+    ['測定回数', values.length]
+  ];
+  const escapeCell = value => {
+    const text = String(value);
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  // UTF-8 BOM and CRLF make Japanese labels recognizable in Excel.
+  const csv = '\uFEFF' + rows.map(row => row.map(escapeCell).join(',')).join('\r\n') + '\r\n';
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `1-second-data-${target / 1000}s-${values.length}回-${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Allow the browser to begin the download before releasing its Blob URL.
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+});

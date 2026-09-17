@@ -55,6 +55,34 @@ const path = require('node:path');
   const cardValues=await page.locator('.stat-value').allTextContents();
   assert.equal(cardValues[1],(mean/1000).toFixed(2)+'秒');
   assert.equal(cardValues[3],(variance/1e6).toFixed(4)+'秒²');
+  const beforeExport = await page.locator('#results').innerHTML();
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('#download-csv').click();
+  const download = await downloadPromise;
+  assert.ok(download.suggestedFilename().endsWith('.csv'));
+  const chunks = [];
+  for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+  const bytes = Buffer.concat(chunks);
+  assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf]);
+  const csv = bytes.subarray(3).toString('utf8');
+  assert.ok(!csv.replace(/\r\n/g, '').includes('\n'));
+  const rows = csv.trimEnd().split('\r\n').map(row => row.split(','));
+  assert.deepEqual(rows[0], ['測定回', '測定時間（秒）']);
+  assert.deepEqual(rows.slice(1, count + 1).map(row => row.map(Number)), expected.map((v, i) => [i + 1, v / 1000]));
+  const exportedStats = Object.fromEntries(rows.slice(count + 3));
+  const sorted = [...expected].sort((a,b)=>a-b);
+  const expectedStats = {
+   '目標（秒）': target, '平均（秒）': mean / 1000,
+   '中央値（秒）': (sorted[count / 2 - 1] + sorted[count / 2]) / 2000,
+   '分散（母分散・秒²）': variance / 1e6,
+   '標準偏差（秒）': Math.sqrt(variance) / 1000,
+   '最小値（秒）': sorted[0] / 1000, '最大値（秒）': sorted.at(-1) / 1000,
+   '測定回数': count
+  };
+  for (const [label, value] of Object.entries(expectedStats)) assert.equal(Number(exportedStats[label]), value);
+  assert.equal(await page.locator('#results').innerHTML(), beforeExport);
+  assert.deepEqual(await page.evaluate(() => session.values), expected);
+  console.log(`PASS CSV: ${count} rows, precise values, all statistics, UTF-8 BOM, CRLF, unchanged results`);
   console.log(`PASS ${target}s / ${count} taps / feedback ${feedback}: intervals, exact count, statistics, graph order, histogram/table`);
  }
  for(const [width,height] of [[390,844],[768,1024],[1440,1000]]) {
