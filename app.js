@@ -164,3 +164,16 @@ $('download-csv').addEventListener('click', () => {
   // Allow the browser to begin the download before releasing its Blob URL.
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 });
+
+// Record one visit per page load without waiting for the response or retrying.
+try {
+  fetch('https://script.google.com/macros/s/AKfycbxssCIHsD-N97SHxNC_GN0ihYeC0qy-lb-EY0KmSs6Gnztaph1sITMerLVEnNWOGkYc/exec?app=one-second-data', {
+    method: 'GET',
+    mode: 'no-cors',
+    cache: 'no-store',
+    credentials: 'omit',
+    keepalive: true,
+  }).catch(() => {});
+} catch {
+  // Access logging must never interrupt the app.
+}
